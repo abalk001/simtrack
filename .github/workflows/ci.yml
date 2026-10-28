@@ -24,7 +24,7 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go ./internal/simtrack -v 
+        run: go test ./internal/simtrack -v 
 
       - name: build
         run: go build -o /tmp/simtrack .
