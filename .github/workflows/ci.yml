@@ -36,4 +36,3 @@ jobs:
       - name: build
         run: cd cmd/simtrack && go build -o /tmp/simtrack .
 
-
