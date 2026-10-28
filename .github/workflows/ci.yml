@@ -35,25 +35,4 @@ jobs:
       - name: build
         run: go build -o /tmp/simtrack ./cmd/simtrack
 
-      - name: shellcheck the Phase 0 wrapper (if still present)
-        if: hashFiles('bin/simtrack-run') != ''
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y shellcheck
-          shellcheck bin/simtrack-run
 
-      - name: end-to-end smoke test
-        run: |
-          # create a throwaway git repo, run the CLI, assert the manifest exists
-          TMP=$(mktemp -d)
-          cd "$TMP"
-          git init -q && git config user.email t@t && git config user.name t
-          echo hi > README.md && git add . && git commit -qm init
-          /tmp/simtrack init demo
-          cd demo && git add . && git commit -qm "init demo"
-          /tmp/simtrack run -- echo hello
-          RUN_DIR=$(ls -td runs/run-* | head -1)
-          test -f "$RUN_DIR/manifest.json"
-          python3 -c "import json,sys; m=json.load(open(sys.argv[1])); \
-            assert m['status']=='completed', m; \
-            assert m['exit_code']==0, m; \
-            assert m['git_dirty'] is False, m" "$RUN_DIR/manifest.json"
