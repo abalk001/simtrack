@@ -22,18 +22,19 @@ jobs:
 
       - name: gofmt check
         run: |
+          cd cmd/simtrack
           if [ -n "$(gofmt -l .)" ]; then
             echo "gofmt required on:"; gofmt -l .; exit 1
           fi
 
       - name: go vet
-        run: go vet ./...
+        run: cd cmd/simtrack && go vet ./...
 
       - name: go test
-        run: go test ./... -race -v
+        run: cd cmd/simtrack && go test ./... -race -v
 
       - name: build
-        run: go build -o /tmp/simtrack ./cmd/simtrack
+        run: cd cmd/simtrack && go build -o /tmp/simtrack .
 
       - name: shellcheck the Phase 0 wrapper (if still present)
         if: hashFiles('bin/simtrack-run') != ''
