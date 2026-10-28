@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# simtrack-run — thin execution wrapper that records one manifest per run.
+# Usage: simtrack-run [--] <command> [args...]
+#   simtrack-run -- python src/main.py --config configs/default.yaml
+#   simtrack-run -- blender -b scene.blend -a
+#   simtrack-run -- false            # deliberate failure test
+
+set -uo pipefail
+
+# --- 1. Require a Git repository ---------------------------------------------
+if ! PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    echo "error: not inside a Git repository" >&2
+    exit 1
+fi
+cd "$PROJECT_ROOT"   # all runs are created at the project root
+
+# --- 2. Capture Git state ----------------------------------------------------
+GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo "no-commits")"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+if git diff --quiet && git diff --cached --quiet; then
+    GIT_DIRTY=false
+else
+    GIT_DIRTY=true
+fi
+
+# --- 3. Parse arguments ------------------------------------------------------
+if [[ "${1:-}" == "--" ]]; then shift; fi
+if [[ $# -eq 0 ]]; then
+    echo "usage: simtrack-run [--] <command> [args...]" >&2
+    exit 2
+fi
+
+# --- 4. Create run directory -------------------------------------------------
+TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
+SHORT_SHA="${GIT_COMMIT:0:7}"
+[[ "$GIT_COMMIT" == "no-commits" ]] && SHORT_SHA="nogit"
+RUN_ID="run-${TIMESTAMP}-${SHORT_SHA}"
+RUN_DIR="runs/${RUN_ID}"
+mkdir -p "$RUN_DIR/artifacts"
+
+# --- 5. Write skeleton manifest ---------------------------------------------
+START_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+START_EPOCH="$(date +%s)"
+
+python3 -c '
+import json, sys
+(run_id, project, commit, branch, dirty, started, command, host) = sys.argv[1:9]
+m = {
+    "run_id": run_id, "project": project,
+    "git_commit": commit, "git_branch": branch, "git_dirty": dirty == "true",
+    "status": "running", "started_at": started, "duration_seconds": None,
+    "command": command, "host": host, "exit_code": None,
+    "stdout_log": "stdout.log", "stderr_log": "stderr.log",
+    "parameters": {}, "metrics": {},
+}
+print(json.dumps(m, indent=2))
+' "$RUN_ID" "$(basename "$PROJECT_ROOT")" "$GIT_COMMIT" "$GIT_BRANCH" "$GIT_DIRTY" \
+  "$START_ISO" "$*" "$(hostname)" > "$RUN_DIR/manifest.json"
+
+# --- 6. Execute the command -------------------------------------------------
+echo "[simtrack] run_id:  $RUN_ID"
+echo "[simtrack] command: $*"
+echo "[simtrack] running..."
+set +e
+"$@" > "$RUN_DIR/stdout.log" 2> "$RUN_DIR/stderr.log"
+EXIT_CODE=$?
+
+# --- 7. Finalize ------------------------------------------------------------
+END_EPOCH="$(date +%s)"
+DURATION=$((END_EPOCH - START_EPOCH))
+[[ $EXIT_CODE -eq 0 ]] && STATUS="completed" || STATUS="failed"
+
+python3 -c '
+import json, sys
+path, status, code, duration = sys.argv[1:5]
+with open(path) as f: m = json.load(f)
+m["status"] = status
+m["exit_code"] = int(code)
+m["duration_seconds"] = int(duration)
+with open(path, "w") as f: json.dump(m, f, indent=2)
+' "$RUN_DIR/manifest.json" "$STATUS" "$EXIT_CODE" "$DURATION"
+
+echo "[simtrack] status:  $STATUS (exit=$EXIT_CODE, duration=${DURATION}s)"
+echo "[simtrack] run dir: $RUN_DIR"
+echo "[simtrack] logs:    $RUN_DIR/stdout.log  $RUN_DIR/stderr.log"
+
+exit "$EXIT_CODE"

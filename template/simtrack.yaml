@@ -1,0 +1,20 @@
+version: 1
+
+project:
+  name: my-project
+  type: generic       
+
+execution:
+  command: python src/main.py --config configs/default.yaml
+  working_dir: .
+  timeout: 3600
+
+tracking:
+  inputs:
+    - configs/*.yaml
+    - inputs/*
+  outputs:
+    - results/*
+    - figures/*
+  metrics:
+    - score
