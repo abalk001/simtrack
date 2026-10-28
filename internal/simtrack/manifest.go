@@ -1,10 +1,12 @@
-package simtrack 
+package simtrack
 
 import (
 	"encoding/json"
 	"os"
 )
 
+// Manifest is the on-disk record of one simulation run.
+// Schema is frozen at v1: see docs/manifest-schema.md.
 type Manifest struct {
 	RunID           string         `json:"run_id"`
 	Project         string         `json:"project"`
@@ -23,30 +25,26 @@ type Manifest struct {
 	Metrics         map[string]any `json:"metrics"`
 }
 
-
 func writeManifest(path string, m *Manifest) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	
 	enc := json.NewEncoder(f)
-	enc.SetIndent(""," ")
+	enc.SetIndent("", "  ")
 	return enc.Encode(m)
-
 }
 
 func readManifest(path string) (*Manifest, error) {
-	f, e := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	var m Manifest 
-	err = json.NewDecoder(file).Decode(&Manifest)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	return $m, nil
+	defer f.Close()
+	var m Manifest
+	if err := json.NewDecoder(f).Decode(&m); err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
