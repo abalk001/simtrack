@@ -28,11 +28,11 @@ jobs:
           fi
 
       - name: go vet
-        run: cd cmd/simtrack && go vet ./...
+        run: go vet ./...
 
       - name: go test
-        run: cd cmd/simtrack && go test ./... -race -v
+        run: go test ./... -race -v
 
       - name: build
-        run: cd cmd/simtrack && go build -o /tmp/simtrack .
+        run: go build -o /tmp/simtrack .
 
